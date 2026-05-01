@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir flask==3.0.0 requests==2.31.0
+
+COPY docker/mock_sentinel_server.py /app/mock_sentinel_server.py
+
+EXPOSE 8080
+
+CMD ["python", "mock_sentinel_server.py"]

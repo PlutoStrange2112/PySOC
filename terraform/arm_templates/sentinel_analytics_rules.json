@@ -1,0 +1,129 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": { "description": "Log Analytics Workspace name" }
+    },
+    "location": {
+      "type": "string",
+      "metadata": { "description": "Azure region" }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/soc-rule-brute-force')]",
+      "location": "[parameters('location')]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "Brute Force Attack - Multiple Failed Logins",
+        "description": "Detects more than 10 failed sign-in attempts from a single IP within 10 minutes.",
+        "severity": "High",
+        "enabled": true,
+        "query": "SigninLogs\n| where ResultType != 0\n| summarize FailedAttempts = count(), Users = dcount(UserPrincipalName) by IPAddress, bin(TimeGenerated, 10m)\n| where FailedAttempts > 10\n| extend AccountCustomEntity = tostring(Users), IPCustomEntity = IPAddress",
+        "queryFrequency": "PT10M",
+        "queryPeriod": "PT10M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": ["CredentialAccess"],
+        "techniques": ["T1110"],
+        "alertDetailsOverride": null,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [{ "identifier": "Address", "columnName": "IPCustomEntity" }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/soc-rule-impossible-travel')]",
+      "location": "[parameters('location')]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "Impossible Travel - Sign-in from Two Distant Locations",
+        "description": "Detects when a user signs in from two geographically distant locations within 1 hour.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "SigninLogs\n| where ResultType == 0\n| project TimeGenerated, UserPrincipalName, Location, IPAddress\n| order by UserPrincipalName, TimeGenerated asc\n| serialize\n| extend PrevLocation = prev(Location, 1), PrevUser = prev(UserPrincipalName, 1), PrevTime = prev(TimeGenerated, 1)\n| where UserPrincipalName == PrevUser and Location != PrevLocation and datetime_diff('minute', TimeGenerated, PrevTime) < 60\n| project TimeGenerated, UserPrincipalName, Location, PrevLocation, IPAddress",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT4H",
+        "suppressionEnabled": false,
+        "tactics": ["InitialAccess"],
+        "techniques": ["T1078"],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [{ "identifier": "FullName", "columnName": "UserPrincipalName" }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/soc-rule-privilege-escalation')]",
+      "location": "[parameters('location')]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "Privilege Escalation - New Global Admin Added",
+        "description": "Alerts when a user is added to the Global Administrator role.",
+        "severity": "High",
+        "enabled": true,
+        "query": "AuditLogs\n| where OperationName == 'Add member to role'\n| extend RoleName = tostring(TargetResources[0].displayName)\n| where RoleName contains 'Global Administrator'\n| extend Actor = tostring(InitiatedBy.user.userPrincipalName), Target = tostring(TargetResources[1].userPrincipalName)\n| project TimeGenerated, Actor, Target, RoleName, CorrelationId",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": ["PrivilegeEscalation"],
+        "techniques": ["T1078.004"],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [{ "identifier": "FullName", "columnName": "Target" }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/soc-rule-data-exfiltration')]",
+      "location": "[parameters('location')]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "Potential Data Exfiltration - Large Blob Download",
+        "description": "Detects unusually large downloads from Azure Blob Storage.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "StorageBlobLogs\n| where OperationName == 'GetBlob'\n| summarize TotalBytes = sum(ResponseBodySize) by CallerIpAddress, bin(TimeGenerated, 1h)\n| where TotalBytes > 1073741824\n| extend IPCustomEntity = CallerIpAddress",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT4H",
+        "suppressionEnabled": false,
+        "tactics": ["Exfiltration"],
+        "techniques": ["T1530"],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [{ "identifier": "Address", "columnName": "IPCustomEntity" }]
+          }
+        ]
+      }
+    }
+  ]
+}

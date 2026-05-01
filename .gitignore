@@ -1,0 +1,31 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars.local
+.terraform.lock.hcl
+crash.log
+override.tf
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+docker/mock_env/.env.local
+
+# Azure Functions local settings
+functions/local.settings.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
